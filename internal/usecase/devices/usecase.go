@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/open-amt-cloud-toolkit/console/internal/entity"
-	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto"
+	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto/v1"
 	"github.com/open-amt-cloud-toolkit/console/pkg/consoleerrors"
 	"github.com/open-amt-cloud-toolkit/console/pkg/logger"
 )
@@ -66,7 +66,7 @@ func (uc *UseCase) dtoToEntity(d *dto.Device) *entity.Device {
 		d.Tags = []string{}
 	}
 
-	tags := strings.Join(d.Tags, ", ")
+	tags := strings.Join(d.Tags, ",")
 
 	d1 := &entity.Device{
 		ConnectionStatus: d.ConnectionStatus,
@@ -88,13 +88,22 @@ func (uc *UseCase) dtoToEntity(d *dto.Device) *entity.Device {
 		AllowSelfSigned: d.AllowSelfSigned,
 	}
 
+	if d.CertHash == "" {
+		d1.CertHash = nil
+	} else {
+		d1.CertHash = &d.CertHash
+	}
+
 	return d1
 }
 
 // convert entity.Device to dto.Device.
 func (uc *UseCase) entityToDTO(d *entity.Device) *dto.Device {
 	// convert comma separated string to []string
-	tags := strings.Split(d.Tags, ",")
+	var tags []string
+	if d.Tags != "" {
+		tags = strings.Split(d.Tags, ",")
+	}
 
 	d1 := &dto.Device{
 		ConnectionStatus: d.ConnectionStatus,
@@ -114,6 +123,10 @@ func (uc *UseCase) entityToDTO(d *entity.Device) *dto.Device {
 		Password:        d.Password,
 		UseTLS:          d.UseTLS,
 		AllowSelfSigned: d.AllowSelfSigned,
+	}
+
+	if d.CertHash != nil {
+		d1.CertHash = *d.CertHash
 	}
 
 	return d1

@@ -14,7 +14,8 @@ import (
 	gomock "go.uber.org/mock/gomock"
 
 	"github.com/open-amt-cloud-toolkit/console/internal/entity"
-	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto"
+	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto/v1"
+	"github.com/open-amt-cloud-toolkit/console/internal/mocks"
 	devices "github.com/open-amt-cloud-toolkit/console/internal/usecase/devices"
 	"github.com/open-amt-cloud-toolkit/console/pkg/logger"
 )
@@ -23,27 +24,28 @@ var ErrGeneral = errors.New("general error")
 
 type test struct {
 	name     string
-	manMock  func(*MockWSMAN, *MockManagement)
-	repoMock func(*MockRepository)
+	manMock  func(*mocks.MockWSMAN, *mocks.MockManagement)
+	repoMock func(*mocks.MockDeviceManagementRepository)
 	res      any
+	resV2    any
 	err      error
 
 	action int
 }
 
-func initPowerTest(t *testing.T) (*devices.UseCase, *MockWSMAN, *MockManagement, *MockRepository) {
+func initPowerTest(t *testing.T) (*devices.UseCase, *mocks.MockWSMAN, *mocks.MockManagement, *mocks.MockDeviceManagementRepository) {
 	t.Helper()
 
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 
-	repo := NewMockRepository(mockCtl)
-	wsmanMock := NewMockWSMAN(mockCtl)
+	repo := mocks.NewMockDeviceManagementRepository(mockCtl)
+	wsmanMock := mocks.NewMockWSMAN(mockCtl)
 	wsmanMock.EXPECT().Worker().Return().AnyTimes()
 
-	managementMock := NewMockManagement(mockCtl)
+	managementMock := mocks.NewMockManagement(mockCtl)
 	log := logger.New("error")
-	u := devices.New(repo, wsmanMock, NewMockRedirection(mockCtl), log)
+	u := devices.New(repo, wsmanMock, mocks.NewMockRedirection(mockCtl), log)
 
 	return u, wsmanMock, managementMock, repo
 }
@@ -64,7 +66,7 @@ func TestSendPowerAction(t *testing.T) {
 		{
 			name:   "success",
 			action: 0,
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -72,7 +74,7 @@ func TestSendPowerAction(t *testing.T) {
 					SendPowerAction(0).
 					Return(powerActionRes, nil)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -83,8 +85,8 @@ func TestSendPowerAction(t *testing.T) {
 		{
 			name:    "GetById fails",
 			action:  0,
-			manMock: func(_ *MockWSMAN, _ *MockManagement) {},
-			repoMock: func(repo *MockRepository) {
+			manMock: func(_ *mocks.MockWSMAN, _ *mocks.MockManagement) {},
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(nil, ErrGeneral)
@@ -95,7 +97,7 @@ func TestSendPowerAction(t *testing.T) {
 		{
 			name:   "SendPowerAction fails",
 			action: 0,
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -103,7 +105,7 @@ func TestSendPowerAction(t *testing.T) {
 					SendPowerAction(0).
 					Return(power.PowerActionResponse{}, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -142,7 +144,7 @@ func TestGetPowerState(t *testing.T) {
 	tests := []test{
 		{
 			name: "success",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -150,30 +152,30 @@ func TestGetPowerState(t *testing.T) {
 					GetPowerState().
 					Return([]service.CIM_AssociatedPowerManagementService{{PowerState: 0}}, nil)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
 			},
-			res: map[string]interface{}{
-				"powerstate": service.PowerState(0),
+			res: dto.PowerState{
+				PowerState: 0,
 			},
 			err: nil,
 		},
 		{
 			name:    "GetById fails",
-			manMock: func(_ *MockWSMAN, _ *MockManagement) {},
-			repoMock: func(repo *MockRepository) {
+			manMock: func(_ *mocks.MockWSMAN, _ *mocks.MockManagement) {},
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(nil, ErrGeneral)
 			},
-			res: map[string]interface{}(nil),
+			res: dto.PowerState{},
 			err: devices.ErrDatabase,
 		},
 		{
 			name: "GetPowerState fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -181,12 +183,12 @@ func TestGetPowerState(t *testing.T) {
 					GetPowerState().
 					Return([]service.CIM_AssociatedPowerManagementService{}, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
 			},
-			res: map[string]interface{}(nil),
+			res: dto.PowerState{},
 			err: ErrGeneral,
 		},
 	}
@@ -220,7 +222,7 @@ func TestGetPowerCapabilities(t *testing.T) {
 	tests := []test{
 		{
 			name: "success",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -231,39 +233,39 @@ func TestGetPowerCapabilities(t *testing.T) {
 					GetPowerCapabilities().
 					Return(boot.BootCapabilitiesResponse{}, nil)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
 			},
-			res: map[string]interface{}{
-				"Power cycle":              5,
-				"Power down":               8,
-				"Power on to IDE-R CDROM":  203,
-				"Power on to IDE-R Floppy": 201,
-				"Power on to PXE":          401,
-				"Power up":                 2,
-				"Reset":                    10,
-				"Reset to IDE-R CDROM":     202,
-				"Reset to IDE-R Floppy":    200,
-				"Reset to PXE":             400,
+			res: dto.PowerCapabilities{
+				PowerUp:             2,
+				PowerCycle:          5,
+				PowerDown:           8,
+				Reset:               10,
+				ResetToIDERFloppy:   200,
+				PowerOnToIDERFloppy: 201,
+				ResetToIDERCDROM:    202,
+				PowerOnToIDERCDROM:  203,
+				ResetToPXE:          400,
+				PowerOnToPXE:        401,
 			},
 			err: nil,
 		},
 		{
 			name:    "GetById fails",
-			manMock: func(_ *MockWSMAN, _ *MockManagement) {},
-			repoMock: func(repo *MockRepository) {
+			manMock: func(_ *mocks.MockWSMAN, _ *mocks.MockManagement) {},
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(nil, ErrGeneral)
 			},
-			res: map[string]interface{}(nil),
+			res: dto.PowerCapabilities{},
 			err: devices.ErrDatabase,
 		},
 		{
 			name: "GetPowerCapabilities fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
@@ -274,12 +276,12 @@ func TestGetPowerCapabilities(t *testing.T) {
 					GetAMTVersion().
 					Return(nil, nil)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
 			},
-			res: map[string]interface{}(nil),
+			res: dto.PowerCapabilities{},
 			err: ErrGeneral,
 		},
 	}
@@ -304,6 +306,41 @@ func TestGetPowerCapabilities(t *testing.T) {
 func TestSetBootOptions(t *testing.T) {
 	t.Parallel()
 
+	bootResponse := boot.BootSettingDataResponse{
+		BIOSLastStatus:           []int{2, 0},
+		BIOSPause:                false,
+		BIOSSetup:                false,
+		BootMediaIndex:           0,
+		BootguardStatus:          127,
+		ConfigurationDataReset:   false,
+		ElementName:              "Intel(r) AMT Boot Configuration Settings",
+		EnforceSecureBoot:        false,
+		FirmwareVerbosity:        0,
+		ForcedProgressEvents:     false,
+		IDERBootDevice:           0,
+		InstanceID:               "Intel(r) AMT:BootSettingData 0",
+		LockKeyboard:             false,
+		LockPowerButton:          false,
+		LockResetButton:          false,
+		LockSleepButton:          false,
+		OptionsCleared:           true,
+		OwningEntity:             "Intel(r) AMT",
+		PlatformErase:            false,
+		RPEEnabled:               false,
+		RSEPassword:              "",
+		ReflashBIOS:              false,
+		SecureBootControlEnabled: false,
+		SecureErase:              false,
+		UEFIHTTPSBootEnabled:     false,
+		UEFILocalPBABootEnabled:  false,
+		UefiBootNumberOfParams:   0,
+		UseIDER:                  false,
+		UseSOL:                   false,
+		UseSafeMode:              false,
+		UserPasswordBypass:       false,
+		WinREBootEnabled:         false,
+	}
+
 	device := &entity.Device{
 		GUID:     "device-guid-123",
 		TenantID: "tenant-id-456",
@@ -319,10 +356,13 @@ func TestSetBootOptions(t *testing.T) {
 	tests := []test{
 		{
 			name: "success",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
+				hmm.EXPECT().
+					GetBootData().
+					Return(bootResponse, nil)
 				hmm.EXPECT().
 					SetBootConfigRole(1).
 					Return(powerActionRes, nil)
@@ -336,7 +376,7 @@ func TestSetBootOptions(t *testing.T) {
 					SendPowerAction(10).
 					Return(powerActionRes, nil)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -346,8 +386,8 @@ func TestSetBootOptions(t *testing.T) {
 		},
 		{
 			name:    "GetById fails",
-			manMock: func(_ *MockWSMAN, _ *MockManagement) {},
-			repoMock: func(repo *MockRepository) {
+			manMock: func(_ *mocks.MockWSMAN, _ *mocks.MockManagement) {},
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(nil, ErrGeneral)
@@ -356,16 +396,37 @@ func TestSetBootOptions(t *testing.T) {
 			err: devices.ErrDatabase,
 		},
 		{
-			name: "SetBootConfigRole fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			name: "GetBootData fails",
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
 				hmm.EXPECT().
+					GetBootData().
+					Return(boot.BootSettingDataResponse{}, ErrGeneral)
+			},
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
+				repo.EXPECT().
+					GetByID(context.Background(), device.GUID, "").
+					Return(device, nil)
+			},
+			res: power.PowerActionResponse{},
+			err: ErrGeneral,
+		},
+		{
+			name: "SetBootConfigRole fails",
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
+				man.EXPECT().
+					SetupWsmanClient(gomock.Any(), false, true).
+					Return(hmm)
+				hmm.EXPECT().
+					GetBootData().
+					Return(bootResponse, nil)
+				hmm.EXPECT().
 					SetBootConfigRole(1).
 					Return(powerActionRes, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -375,10 +436,13 @@ func TestSetBootOptions(t *testing.T) {
 		},
 		{
 			name: "ChangeBootOrder fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
+				hmm.EXPECT().
+					GetBootData().
+					Return(bootResponse, nil)
 				hmm.EXPECT().
 					SetBootConfigRole(1).
 					Return(powerActionRes, nil)
@@ -386,7 +450,7 @@ func TestSetBootOptions(t *testing.T) {
 					ChangeBootOrder(string(cimBoot.PXE)).
 					Return(cimBoot.ChangeBootOrder_OUTPUT{}, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -396,10 +460,13 @@ func TestSetBootOptions(t *testing.T) {
 		},
 		{
 			name: "SetBootData fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
+				hmm.EXPECT().
+					GetBootData().
+					Return(bootResponse, nil)
 				hmm.EXPECT().
 					SetBootConfigRole(1).
 					Return(powerActionRes, nil)
@@ -410,7 +477,7 @@ func TestSetBootOptions(t *testing.T) {
 					SetBootData(gomock.Any()).
 					Return(nil, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)
@@ -420,10 +487,13 @@ func TestSetBootOptions(t *testing.T) {
 		},
 		{
 			name: "GetPowerCapabilities fails",
-			manMock: func(man *MockWSMAN, hmm *MockManagement) {
+			manMock: func(man *mocks.MockWSMAN, hmm *mocks.MockManagement) {
 				man.EXPECT().
 					SetupWsmanClient(gomock.Any(), false, true).
 					Return(hmm)
+				hmm.EXPECT().
+					GetBootData().
+					Return(bootResponse, nil)
 				hmm.EXPECT().
 					SetBootConfigRole(1).
 					Return(powerActionRes, nil)
@@ -437,7 +507,7 @@ func TestSetBootOptions(t *testing.T) {
 					SendPowerAction(10).
 					Return(powerActionRes, ErrGeneral)
 			},
-			repoMock: func(repo *MockRepository) {
+			repoMock: func(repo *mocks.MockDeviceManagementRepository) {
 				repo.EXPECT().
 					GetByID(context.Background(), device.GUID, "").
 					Return(device, nil)

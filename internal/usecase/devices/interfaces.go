@@ -8,7 +8,8 @@ import (
 	"github.com/open-amt-cloud-toolkit/go-wsman-messages/v2/pkg/wsman/cim/power"
 
 	"github.com/open-amt-cloud-toolkit/console/internal/entity"
-	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto"
+	"github.com/open-amt-cloud-toolkit/console/internal/entity/dto/v1"
+	dtov2 "github.com/open-amt-cloud-toolkit/console/internal/entity/dto/v2"
 	wsmanAPI "github.com/open-amt-cloud-toolkit/console/internal/usecase/devices/wsman"
 )
 
@@ -17,6 +18,12 @@ type (
 		SetupWsmanClient(device dto.Device, isRedirection, logMessages bool) wsmanAPI.Management
 		DestroyWsmanClient(device dto.Device)
 		Worker()
+	}
+
+	WebSocketConn interface {
+		ReadMessage() (int, []byte, error)
+		WriteMessage(messageType int, data []byte) error
+		Close() error
 	}
 
 	Redirection interface {
@@ -49,15 +56,15 @@ type (
 		Insert(ctx context.Context, d *dto.Device) (*dto.Device, error)
 		GetByColumn(ctx context.Context, columnName, queryValue, tenantID string) ([]dto.Device, error)
 		// Management Calls
-		GetVersion(ctx context.Context, guid string) (map[string]interface{}, error)
-		GetFeatures(ctx context.Context, guid string) (dto.Features, error)
-		SetFeatures(ctx context.Context, guid string, features dto.Features) (dto.Features, error)
+		GetVersion(ctx context.Context, guid string) (dto.Version, dtov2.Version, error)
+		GetFeatures(ctx context.Context, guid string) (dto.Features, dtov2.Features, error)
+		SetFeatures(ctx context.Context, guid string, features dto.Features) (dto.Features, dtov2.Features, error)
 		GetAlarmOccurrences(ctx context.Context, guid string) ([]dto.AlarmClockOccurrence, error)
-		CreateAlarmOccurrences(ctx context.Context, guid string, alarm dto.AlarmClockOccurrence) (dto.AddAlarmOutput, error)
+		CreateAlarmOccurrences(ctx context.Context, guid string, alarm dto.AlarmClockOccurrenceInput) (dto.AddAlarmOutput, error)
 		DeleteAlarmOccurrences(ctx context.Context, guid, instanceID string) error
 		GetHardwareInfo(ctx context.Context, guid string) (interface{}, error)
-		GetPowerState(ctx context.Context, guid string) (map[string]interface{}, error)
-		GetPowerCapabilities(ctx context.Context, guid string) (map[string]interface{}, error)
+		GetPowerState(ctx context.Context, guid string) (dto.PowerState, error)
+		GetPowerCapabilities(ctx context.Context, guid string) (dto.PowerCapabilities, error)
 		GetGeneralSettings(ctx context.Context, guid string) (interface{}, error)
 		CancelUserConsent(ctx context.Context, guid string) (interface{}, error)
 		GetUserConsentCode(ctx context.Context, guid string) (map[string]interface{}, error)
@@ -69,6 +76,8 @@ type (
 		Redirect(ctx context.Context, conn *websocket.Conn, guid, mode string) error
 		GetNetworkSettings(c context.Context, guid string) (dto.NetworkSettings, error)
 		GetCertificates(c context.Context, guid string) (dto.SecuritySettings, error)
+		GetTLSSettingData(c context.Context, guid string) ([]dto.SettingDataResponse, error)
 		GetDiskInfo(c context.Context, guid string) (interface{}, error)
+		GetDeviceCertificate(c context.Context, guid string) (dto.Certificate, error)
 	}
 )
